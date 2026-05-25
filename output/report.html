@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"/>
+<title>OLP – Informe de Tendencias (Interactivo)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+         background: #f0f2f5; margin: 0; padding: 20px; color: #172b4d; }
+  .container { max-width: 1400px; margin: 0 auto; }
+  .header { background: linear-gradient(135deg, #1a73e8, #0d47a1);
+             color: white; padding: 30px 40px; border-radius: 12px; margin-bottom: 24px; }
+  .header h1 { margin: 0; font-size: 28px; }
+  .header p { margin: 8px 0 0; opacity: 0.9; }
+  .header .hint { margin-top: 12px; font-size: 13px; opacity: 0.8; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+               gap: 16px; margin-bottom: 24px; }
+  .kpi { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.12);
+          text-align: center; transition: transform .1s; }
+  .kpi:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.15); }
+  .kpi .value { font-size: 32px; font-weight: 700; color: #1a73e8; }
+  .kpi .label { font-size: 13px; color: #5e6c84; margin-top: 4px; }
+  .kpi .trend { font-size: 18px; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; background: white; border-radius: 10px;
+           overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.12); margin-bottom: 24px; }
+  th { background: #1a73e8; color: white; padding: 12px 16px; text-align: left; font-weight: 600; }
+  td { padding: 10px 16px; border-bottom: 1px solid #eee; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f5f8ff; }
+  .section-title { font-size: 20px; font-weight: 600; margin: 32px 0 16px;
+                     color: #172b4d; border-bottom: 2px solid #1a73e8; padding-bottom: 8px; }
+  .chart-row { display: flex; gap: 16px; margin-bottom: 16px; }
+  .chart-cell { flex: 1; min-width: 0; }
+  @media (max-width: 900px) { .chart-row { flex-direction: column; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>📊 OLP – Informe de Tendencias</h1>
+    <p>Ultimos 6 meses · Generado: 2026-05-25 17:34</p>
+    <div class="hint">🖱 Pasa el mouse sobre los graficos para ver los valores detallados</div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="value">Sprint 106</div>
+      <div class="label">Ultimo Sprint</div>
+    </div>
+    <div class="kpi">
+      <div class="value">489</div>
+      <div class="label">Issues completadas (6M)</div>
+    </div>
+    <div class="kpi">
+      <div class="value">1096.0</div>
+      <div class="label">Story Points (6M)</div>
+    </div>
+    <div class="kpi">
+      <div class="value">59.3</div>
+      <div class="label">Lead Time prom. (dias)</div>
+      <div class="trend">↘️</div>
+    </div>
+    <div class="kpi">
+      <div class="value">36.5</div>
+      <div class="label">Cycle Time prom. (dias)</div>
+      <div class="trend">↘️</div>
+    </div>
+    <div class="kpi">
+      <div class="value">242</div>
+      <div class="label">WIP actual</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">📈 Desglose por Sprint</h2>
+  <table>
+    <tr>
+      <th>Sprint</th>
+      <th>Total Issues</th>
+      <th>Completadas</th>
+      <th>Story Points</th>
+      <th>Lead Time (avg)</th>
+      <th>Cycle Time (avg)</th>
+    </tr>
+    <tr>
+            <td>Sprint 95</td>
+            <td>50</td>
+            <td><strong>45</strong></td>
+            <td>105.0</td>
+            <td>93.2d</td>
+            <td>65.2d</td>
+        </tr><tr>
+            <td>Sprint 96</td>
+            <td>57</td>
+            <td><strong>50</strong></td>
+            <td>116.0</td>
+            <td>87.3d</td>
+            <td>60.2d</td>
+        </tr><tr>
+            <td>Sprint 97</td>
+            <td>54</td>
+            <td><strong>46</strong></td>
+            <td>97.0</td>
+            <td>69.7d</td>
+            <td>47.2d</td>
+        </tr><tr>
+            <td>Sprint 98</td>
+            <td>78</td>
+            <td><strong>71</strong></td>
+            <td>144.0</td>
+            <td>73.5d</td>
+            <td>50.0d</td>
+        </tr><tr>
+            <td>Sprint 99</td>
+            <td>50</td>
+            <td><strong>49</strong></td>
+            <td>100.0</td>
+            <td>71.0d</td>
+            <td>38.0d</td>
+        </tr><tr>
+            <td>Sprint 100</td>
+            <td>39</td>
+            <td><strong>39</strong></td>
+            <td>72.0</td>
+            <td>77.4d</td>
+            <td>17.1d</td>
+        </tr><tr>
+            <td>Sprint 101</td>
+            <td>39</td>
+            <td><strong>36</strong></td>
+            <td>91.0</td>
+            <td>32.4d</td>
+            <td>23.1d</td>
+        </tr><tr>
+            <td>Sprint 102</td>
+            <td>46</td>
+            <td><strong>39</strong></td>
+            <td>104.0</td>
+            <td>39.7d</td>
+            <td>25.6d</td>
+        </tr><tr>
+            <td>Sprint 103</td>
+            <td>44</td>
+            <td><strong>34</strong></td>
+            <td>74.0</td>
+            <td>44.9d</td>
+            <td>32.0d</td>
+        </tr><tr>
+            <td>Sprint 104</td>
+            <td>49</td>
+            <td><strong>35</strong></td>
+            <td>82.0</td>
+            <td>35.7d</td>
+            <td>26.4d</td>
+        </tr><tr>
+            <td>Sprint 105</td>
+            <td>49</td>
+            <td><strong>25</strong></td>
+            <td>64.0</td>
+            <td>43.7d</td>
+            <td>28.4d</td>
+        </tr><tr>
+            <td>Sprint 106</td>
+            <td>53</td>
+            <td><strong>20</strong></td>
+            <td>47.0</td>
+            <td>43.1d</td>
+            <td>24.7d</td>
+        </tr>
+  </table>
+
+  <h2 class="section-title">📊 Visualizaciones Interactivas</h2>
+  <p style="color:#5e6c84;margin-top:-8px;margin-bottom:16px;">
+    Pasa el cursor sobre los graficos para ver valores, haz clic en la leyenda para ocultar/mostrar series.
+  </p>
+  <div class="chart-row"><div class="chart-cell"><iframe src="01_velocity_throughput.html" frameborder="0" scrolling="no" style="width:100%;height:640px;border:1px solid #e0e0e0;border-radius:10px;background:white;"></iframe></div></div><div class="chart-row"><div class="chart-cell"><iframe src="02_lead_cycle_time.html" frameborder="0" scrolling="no" style="width:100%;height:640px;border:1px solid #e0e0e0;border-radius:10px;background:white;"></iframe></div></div><div class="chart-row"><div class="chart-cell"><iframe src="03_assignee_load.html" frameborder="0" scrolling="no" style="width:100%;height:640px;border:1px solid #e0e0e0;border-radius:10px;background:white;"></iframe></div></div><div class="chart-row"><div class="chart-cell"><iframe src="04_distribution_type.html" frameborder="0" scrolling="no" style="width:100%;height:640px;border:1px solid #e0e0e0;border-radius:10px;background:white;"></iframe></div></div><div class="chart-row"><div class="chart-cell"><iframe src="04_distribution_priority.html" frameborder="0" scrolling="no" style="width:100%;height:640px;border:1px solid #e0e0e0;border-radius:10px;background:white;"></iframe></div></div><div class="chart-row"><div class="chart-cell"><iframe src="05_wip_aging.html" frameborder="0" scrolling="no" style="width:100%;height:640px;border:1px solid #e0e0e0;border-radius:10px;background:white;"></iframe></div></div>
+
+  <p style="text-align:center;color:#5e6c84;margin-top:40px;font-size:12px;">
+    Informe generado automaticamente · OLP – Proyecto Olimpo ·
+    <a href="https://aurusjoyeria.atlassian.net/jira/dashboards/10572">Dashboard OLP – Tendencias 6M</a>
+  </p>
+</div>
+</body>
+</html>
