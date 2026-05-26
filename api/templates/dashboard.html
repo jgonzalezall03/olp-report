@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard de Productividad</title>
+  <script src="https://cdn.plot.ly/plotly-2.29.1.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3250;
+      --accent: #6366f1;
+      --accent2: #10b981;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --radius: 14px;
+    }
+
+    body { font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* NAVBAR */
+    nav {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      padding: 14px 28px; background: var(--surface);
+      border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100;
+    }
+    .nav-brand { font-size: 1.1rem; font-weight: 700; color: var(--accent); white-space: nowrap; }
+    .nav-brand span { color: var(--text); }
+    .nav-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+
+    select, .btn {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 7px 14px; font-size: 0.875rem; cursor: pointer;
+      transition: border-color .15s;
+    }
+    select:focus, select:hover { border-color: var(--accent); outline: none; }
+
+    .btn { font-weight: 600; }
+    .btn-accent { background: var(--accent); border-color: var(--accent); color: white; }
+    .btn-accent:hover { opacity: .85; }
+    .btn-ghost { background: transparent; }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+    .range-group { display: flex; gap: 4px; }
+    .range-btn {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+      border-radius: 8px; padding: 6px 14px; font-size: 0.8rem; cursor: pointer; font-weight: 600;
+      transition: all .15s;
+    }
+    .range-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+    /* MAIN */
+    main { padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
+
+    /* PROJECT HEADER */
+    .project-header { margin-bottom: 20px; }
+    .project-header h1 { font-size: 1.5rem; font-weight: 700; }
+    .project-header p { color: var(--muted); font-size: 0.875rem; margin-top: 4px; }
+
+    /* KPI STRIP */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+    .kpi-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 20px; position: relative; overflow: hidden;
+    }
+    .kpi-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: var(--kpi-color, var(--accent));
+    }
+    .kpi-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+    .kpi-value { font-size: 2rem; font-weight: 700; line-height: 1; }
+    .kpi-delta { font-size: 0.8rem; margin-top: 6px; display: flex; align-items: center; gap: 4px; }
+    .delta-up { color: var(--accent2); }
+    .delta-down { color: var(--danger); }
+    .delta-neutral { color: var(--muted); }
+    .delta-good-down { color: var(--accent2); }
+
+    /* CHARTS GRID */
+    .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .chart-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 20px;
+    }
+    .chart-card h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 4px; }
+    .chart-card p { font-size: 0.75rem; color: var(--muted); margin-bottom: 14px; }
+    .chart-card .plotly-chart { width: 100%; height: 300px; }
+
+    /* EMPTY STATE */
+    .empty { text-align: center; padding: 80px 20px; color: var(--muted); }
+    .empty svg { margin-bottom: 16px; opacity: .3; }
+    .empty h2 { font-size: 1.1rem; margin-bottom: 8px; color: var(--text); }
+
+    @media (max-width: 900px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .charts-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 500px) {
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+      nav { padding: 12px 16px; }
+      main { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">⚡ <span>Productividad</span></div>
+
+  <div class="nav-controls">
+    <select id="project-select" onchange="changeProject()">
+      {% for project in projects %}
+        <option value="{{ project.key }}" {% if selected_project and selected_project.key == project.key %}selected{% endif %}>
+          {{ project.name }} ({{ project.key }})
+        </option>
+      {% endfor %}
+    </select>
+
+    <div class="range-group">
+      <button class="range-btn" data-months="3" onclick="setRange(3)">3M</button>
+      <button class="range-btn active" data-months="6" onclick="setRange(6)">6M</button>
+      <button class="range-btn" data-months="12" onclick="setRange(12)">12M</button>
+    </div>
+
+    <button class="btn btn-accent" onclick="syncProject()">↻ Sync</button>
+    <a href="/logout" class="btn btn-ghost">Salir</a>
+  </div>
+</nav>
+
+<main>
+  {% if selected_project %}
+  <div class="project-header">
+    <h1>{{ selected_project.name }}</h1>
+    <p>{{ selected_project.key }} · Board {{ selected_project.board_id or 'N/A' }} · Bienvenido, {{ request.session.user }}</p>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card" style="--kpi-color: #6366f1">
+      <div class="kpi-label">Issues completadas</div>
+      <div class="kpi-value" id="kpi-completed">—</div>
+      <div class="kpi-delta" id="kpi-completed-delta"></div>
+    </div>
+    <div class="kpi-card" style="--kpi-color: #10b981">
+      <div class="kpi-label">Story Points (velocity)</div>
+      <div class="kpi-value" id="kpi-velocity">—</div>
+      <div class="kpi-delta" id="kpi-velocity-delta"></div>
+    </div>
+    <div class="kpi-card" style="--kpi-color: #f59e0b">
+      <div class="kpi-label">Lead Time promedio</div>
+      <div class="kpi-value" id="kpi-lead">—</div>
+      <div class="kpi-delta" id="kpi-lead-delta"></div>
+    </div>
+    <div class="kpi-card" style="--kpi-color: #ef4444">
+      <div class="kpi-label">Cycle Time promedio</div>
+      <div class="kpi-value" id="kpi-cycle">—</div>
+      <div class="kpi-delta" id="kpi-cycle-delta"></div>
+    </div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>Throughput mensual</h3>
+      <p>Issues completadas vs total por mes</p>
+      <div id="chart-throughput" class="plotly-chart"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Lead Time & Cycle Time</h3>
+      <p>Días promedio por mes — banda = min/max</p>
+      <div id="chart-times" class="plotly-chart"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Velocity trend</h3>
+      <p>Story points completados por sprint con tendencia</p>
+      <div id="chart-velocity" class="plotly-chart"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Flow Efficiency</h3>
+      <p>% tiempo activo = cycle time / lead time por mes</p>
+      <div id="chart-flow" class="plotly-chart"></div>
+    </div>
+  </div>
+
+  {% else %}
+  <div class="empty">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
+    <h2>No hay proyectos disponibles</h2>
+    <p>Sincroniza un proyecto desde la API para comenzar.</p>
+  </div>
+  {% endif %}
+</main>
+
+<script>
+  const ALL_METRICS = {{ metrics | safe }};
+  const PROJECT_KEY = "{{ selected_project.key if selected_project else '' }}";
+  let activeMonths = 6;
+
+  const PLOTLY_LAYOUT = {
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: { color: '#e2e8f0', size: 11 },
+    margin: { t: 10, r: 10, b: 50, l: 45 },
+    xaxis: { gridcolor: '#2e3250', tickangle: -30, tickfont: { size: 10 } },
+    yaxis: { gridcolor: '#2e3250' },
+    legend: { orientation: 'h', y: -0.25, font: { size: 10 } },
+    showlegend: true,
+  };
+
+  const PLOTLY_CONFIG = { displayModeBar: false, responsive: true };
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  function toMonthKey(dateStr) {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  function toMonthLabel(key) {
+    const [y, m] = key.split('-');
+    return new Date(y, m - 1).toLocaleDateString('es', { month: 'short', year: '2-digit' });
+  }
+
+  function avg(arr) {
+    const v = arr.filter(x => x != null && x > 0);
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+  }
+
+  function filterByRange(metrics, months) {
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - months);
+    return metrics.filter(m => {
+      if (!m.sprint_start_date) return true;
+      return new Date(m.sprint_start_date) >= cutoff;
+    });
+  }
+
+  function groupByMonth(metrics) {
+    const map = {};
+    for (const m of metrics) {
+      const key = toMonthKey(m.sprint_start_date) || 'Sin fecha';
+      if (!map[key]) map[key] = [];
+      map[key].push(m);
+    }
+    return map;
+  }
+
+  function trendLine(y) {
+    const n = y.length;
+    if (n < 2) return y;
+    const xs = y.map((_, i) => i);
+    const mx = xs.reduce((a, b) => a + b, 0) / n;
+    const my = y.reduce((a, b) => a + b, 0) / n;
+    const num = xs.reduce((s, x, i) => s + (x - mx) * (y[i] - my), 0);
+    const den = xs.reduce((s, x) => s + (x - mx) ** 2, 0);
+    const slope = den ? num / den : 0;
+    const intercept = my - slope * mx;
+    return xs.map(x => +(slope * x + intercept).toFixed(2));
+  }
+
+  function deltaHtml(curr, prev, unit = '', lowerIsBetter = false) {
+    if (prev == null || curr == null) return '<span class="delta-neutral">sin datos previos</span>';
+    const diff = curr - prev;
+    const pct = prev !== 0 ? ((diff / prev) * 100).toFixed(1) : null;
+    const label = pct != null ? `${diff > 0 ? '+' : ''}${pct}% vs mes anterior` : `${diff > 0 ? '+' : ''}${diff.toFixed(1)}${unit} vs mes anterior`;
+    const isGood = lowerIsBetter ? diff < 0 : diff > 0;
+    const cls = diff === 0 ? 'delta-neutral' : (isGood ? 'delta-up' : 'delta-down');
+    const arrow = diff > 0 ? '↑' : '↓';
+    return `<span class="${cls}">${arrow} ${label}</span>`;
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  function render(months) {
+    const metrics = filterByRange(ALL_METRICS, months);
+    if (!metrics.length) return;
+
+    const byMonth = groupByMonth(metrics);
+    const keys = Object.keys(byMonth).sort();
+    const labels = keys.map(k => k === 'Sin fecha' ? k : toMonthLabel(k));
+
+    const mCompleted  = keys.map(k => byMonth[k].reduce((s, m) => s + m.completed, 0));
+    const mTotal      = keys.map(k => byMonth[k].reduce((s, m) => s + m.total_issues, 0));
+    const mVelocity   = keys.map(k => byMonth[k].reduce((s, m) => s + m.velocity, 0));
+    const mLeadAvg    = keys.map(k => avg(byMonth[k].map(m => m.lead_time_avg)));
+    const mLeadMin    = keys.map(k => avg(byMonth[k].map(m => m.lead_time_med)));
+    const mCycleAvg   = keys.map(k => avg(byMonth[k].map(m => m.cycle_time_avg)));
+    const mCycleMin   = keys.map(k => avg(byMonth[k].map(m => m.cycle_time_med)));
+    const mFlow       = keys.map((k, i) => {
+      const l = mLeadAvg[i], c = mCycleAvg[i];
+      return (l && c && l > 0) ? +((c / l) * 100).toFixed(1) : null;
+    });
+
+    // KPIs — comparar último mes vs penúltimo
+    const last = keys.length - 1;
+    const prev = keys.length - 2;
+
+    document.getElementById('kpi-completed').textContent = mCompleted[last] ?? '—';
+    document.getElementById('kpi-completed-delta').innerHTML = deltaHtml(mCompleted[last], mCompleted[prev]);
+
+    document.getElementById('kpi-velocity').textContent = mVelocity[last] != null ? mVelocity[last].toFixed(0) : '—';
+    document.getElementById('kpi-velocity-delta').innerHTML = deltaHtml(mVelocity[last], mVelocity[prev]);
+
+    const leadVal = mLeadAvg[last];
+    document.getElementById('kpi-lead').textContent = leadVal != null ? leadVal.toFixed(1) + 'd' : '—';
+    document.getElementById('kpi-lead-delta').innerHTML = deltaHtml(leadVal, mLeadAvg[prev], 'd', true);
+
+    const cycleVal = mCycleAvg[last];
+    document.getElementById('kpi-cycle').textContent = cycleVal != null ? cycleVal.toFixed(1) + 'd' : '—';
+    document.getElementById('kpi-cycle-delta').innerHTML = deltaHtml(cycleVal, mCycleAvg[prev], 'd', true);
+
+    // ── Chart 1: Throughput ──
+    Plotly.react('chart-throughput', [
+      {
+        x: labels, y: mTotal, type: 'bar', name: 'Total issues',
+        marker: { color: '#2e3250' },
+      },
+      {
+        x: labels, y: mCompleted, type: 'bar', name: 'Completadas',
+        marker: { color: '#6366f1' },
+      },
+      {
+        x: labels,
+        y: mCompleted.map((c, i) => mTotal[i] ? +((c / mTotal[i]) * 100).toFixed(1) : null),
+        type: 'scatter', mode: 'lines+markers', name: '% completado',
+        yaxis: 'y2', line: { color: '#10b981', width: 2 }, marker: { size: 5 },
+      },
+    ], {
+      ...PLOTLY_LAYOUT,
+      barmode: 'overlay',
+      yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Issues' },
+      yaxis2: { overlaying: 'y', side: 'right', title: '%', gridcolor: 'transparent', range: [0, 110], ticksuffix: '%' },
+    }, PLOTLY_CONFIG);
+
+    // ── Chart 2: Lead & Cycle Time con banda ──
+    const leadUpper = keys.map(k => {
+      const vals = byMonth[k].map(m => m.lead_time_avg).filter(v => v != null);
+      return vals.length ? Math.max(...vals) : null;
+    });
+    const leadLower = keys.map(k => {
+      const vals = byMonth[k].map(m => m.lead_time_med).filter(v => v != null);
+      return vals.length ? Math.min(...vals) : null;
+    });
+
+    Plotly.react('chart-times', [
+      {
+        x: [...labels, ...labels.slice().reverse()],
+        y: [...leadUpper, ...leadLower.slice().reverse()],
+        fill: 'toself', fillcolor: 'rgba(245,158,11,0.1)',
+        line: { color: 'transparent' }, name: 'Rango Lead', showlegend: false, hoverinfo: 'skip',
+      },
+      {
+        x: labels, y: mLeadAvg, type: 'scatter', mode: 'lines+markers',
+        name: 'Lead Time', line: { color: '#f59e0b', width: 2 }, marker: { size: 5 },
+      },
+      {
+        x: labels, y: mCycleAvg, type: 'scatter', mode: 'lines+markers',
+        name: 'Cycle Time', line: { color: '#ef4444', width: 2 }, marker: { size: 5 },
+      },
+    ], {
+      ...PLOTLY_LAYOUT,
+      yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Días' },
+    }, PLOTLY_CONFIG);
+
+    // ── Chart 3: Velocity por sprint con tendencia ──
+    const sprintLabels = metrics.map(m => m.sprint_name);
+    const sprintVelocity = metrics.map(m => m.velocity);
+    Plotly.react('chart-velocity', [
+      {
+        x: sprintLabels, y: sprintVelocity, type: 'bar', name: 'Story Points',
+        marker: { color: sprintVelocity.map((v, i, arr) => {
+          const t = trendLine(arr);
+          return v >= t[i] ? '#10b981' : '#6366f1';
+        })},
+      },
+      {
+        x: sprintLabels, y: trendLine(sprintVelocity), type: 'scatter',
+        mode: 'lines', name: 'Tendencia',
+        line: { color: '#f59e0b', width: 2, dash: 'dot' },
+      },
+    ], {
+      ...PLOTLY_LAYOUT,
+      yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Story Points' },
+    }, PLOTLY_CONFIG);
+
+    // ── Chart 4: Flow Efficiency ──
+    const flowColors = mFlow.map(v => {
+      if (v == null) return '#2e3250';
+      if (v >= 60) return '#10b981';
+      if (v >= 35) return '#f59e0b';
+      return '#ef4444';
+    });
+    Plotly.react('chart-flow', [
+      {
+        x: labels, y: mFlow, type: 'bar', name: 'Flow Efficiency',
+        marker: { color: flowColors },
+        text: mFlow.map(v => v != null ? v + '%' : ''),
+        textposition: 'outside', textfont: { size: 10 },
+      },
+      {
+        x: labels, y: Array(labels.length).fill(40),
+        type: 'scatter', mode: 'lines', name: 'Objetivo 40%',
+        line: { color: '#6366f1', width: 1.5, dash: 'dash' },
+      },
+    ], {
+      ...PLOTLY_LAYOUT,
+      yaxis: { ...PLOTLY_LAYOUT.yaxis, title: '%', range: [0, 110], ticksuffix: '%' },
+    }, PLOTLY_CONFIG);
+  }
+
+  // ── Controls ──────────────────────────────────────────────────────────────
+
+  function setRange(months) {
+    activeMonths = months;
+    document.querySelectorAll('.range-btn').forEach(b => {
+      b.classList.toggle('active', +b.dataset.months === months);
+    });
+    render(months);
+  }
+
+  function changeProject() {
+    const key = document.getElementById('project-select').value;
+    window.location.href = `/dashboard?project=${key}`;
+  }
+
+  async function syncProject() {
+    if (!PROJECT_KEY) return;
+    const btn = document.querySelector('.btn-accent');
+    btn.textContent = '…';
+    btn.disabled = true;
+    try {
+      await fetch(`/api/projects/${PROJECT_KEY}/sync/`, { method: 'POST' });
+      btn.textContent = '✓ En cola';
+      setTimeout(() => { btn.textContent = '↻ Sync'; btn.disabled = false; }, 2000);
+    } catch {
+      btn.textContent = '↻ Sync'; btn.disabled = false;
+    }
+  }
+
+  if (ALL_METRICS.length) render(activeMonths);
+</script>
+</body>
+</html>

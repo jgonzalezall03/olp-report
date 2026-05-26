@@ -1,0 +1,82 @@
+version: '3.9'
+
+services:
+  web:
+    build: .
+    container_name: olp-report-web
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://olp_user:olp_pass@db:5432/olp_report
+      - ATLASSIAN_SITE=https://aurusjoyeria.atlassian.net
+      - ATLASSIAN_EMAIL=agonzalez@nxtara.com
+      - ATLASSIAN_TOKEN_FILE=/run/secrets/atlassian_token
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    volumes:
+      - .:/app:cached
+    secrets:
+      - atlassian_token
+
+  db:
+    image: postgres:16-alpine
+    container_name: olp-report-db
+    environment:
+      POSTGRES_DB: olp_report
+      POSTGRES_USER: olp_user
+      POSTGRES_PASSWORD: olp_pass
+    volumes:
+      - olp_report_db_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: olp-report-redis
+    restart: unless-stopped
+
+  worker:
+    build: .
+    container_name: olp-report-worker
+    command: celery -A api.celery worker --loglevel=info
+    depends_on:
+      - redis
+      - db
+    environment:
+      - DATABASE_URL=postgresql://olp_user:olp_pass@db:5432/olp_report
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - ATLASSIAN_SITE=https://aurusjoyeria.atlassian.net
+      - ATLASSIAN_EMAIL=agonzalez@nxtara.com
+      - ATLASSIAN_TOKEN_FILE=/run/secrets/atlassian_token
+    volumes:
+      - .:/app:cached
+    secrets:
+      - atlassian_token
+
+  beat:
+    build: .
+    container_name: olp-report-beat
+    command: celery -A api.celery beat --loglevel=info
+    depends_on:
+      - redis
+      - db
+    environment:
+      - DATABASE_URL=postgresql://olp_user:olp_pass@db:5432/olp_report
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - ATLASSIAN_SITE=https://aurusjoyeria.atlassian.net
+      - ATLASSIAN_EMAIL=agonzalez@nxtara.com
+      - ATLASSIAN_TOKEN_FILE=/run/secrets/atlassian_token
+    volumes:
+      - .:/app:cached
+    secrets:
+      - atlassian_token
+
+volumes:
+  olp_report_db_data:
+
+secrets:
+  atlassian_token:
+    file: ./secrets/atlassian_token.txt

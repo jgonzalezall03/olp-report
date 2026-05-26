@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Proyectos · Admin</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a; --border: #2e3250;
+      --accent: #6366f1; --green: #10b981; --warn: #f59e0b; --danger: #ef4444;
+      --text: #e2e8f0; --muted: #64748b; --radius: 12px;
+    }
+    body { font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    nav {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-brand { font-size: 1rem; font-weight: 700; color: var(--accent); }
+    .nav-controls { margin-left: auto; display: flex; gap: 8px; }
+    .btn {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 6px 14px; font-size: 0.85rem; font-weight: 600;
+      cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .8; }
+    .btn-accent { background: var(--accent); border-color: var(--accent); color: white; }
+    .btn-ghost { background: transparent; }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-danger { background: rgba(239,68,68,.1); border-color: var(--danger); color: var(--danger); }
+    .btn-sm { padding: 4px 10px; font-size: 0.78rem; }
+
+    main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+    .page-header h1 { font-size: 1.3rem; font-weight: 700; }
+    .page-header p { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+
+    /* Flash */
+    .flash { padding: 12px 16px; border-radius: var(--radius); margin-bottom: 16px; font-size: 0.875rem; font-weight: 500; }
+    .flash-success { background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.3); color: #10b981; }
+    .flash-warn { background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.3); color: #f59e0b; }
+
+    /* Table */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 24px; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { padding: 12px 16px; text-align: left; font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); background: var(--surface2); }
+    tbody td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 0.875rem; vertical-align: middle; }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--surface2); }
+
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
+    .badge-scrum { background: rgba(99,102,241,.15); color: #818cf8; }
+    .badge-kanban { background: rgba(14,165,233,.15); color: #38bdf8; }
+    .badge-active { background: rgba(16,185,129,.15); color: #10b981; }
+    .badge-inactive { background: rgba(100,116,139,.15); color: #64748b; }
+
+    .actions { display: flex; gap: 6px; align-items: center; }
+
+    /* Toggle switch */
+    .toggle { position: relative; display: inline-block; width: 40px; height: 22px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; inset: 0; background: var(--border); border-radius: 22px; transition: .2s; }
+    .slider::before { content: ''; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: .2s; }
+    input:checked + .slider { background: var(--green); }
+    input:checked + .slider::before { transform: translateX(18px); }
+
+    /* Add form */
+    .add-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .add-card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 16px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 2fr 1fr auto auto; gap: 10px; align-items: end; }
+    .field label { display: block; font-size: 0.72rem; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+    input[type=text], input[type=number] {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 8px 12px; font-size: 0.875rem;
+    }
+    input[type=text]:focus, input[type=number]:focus { border-color: var(--accent); outline: none; }
+    .field-check { display: flex; flex-direction: column; gap: 4px; }
+    .field-check label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .check-row { display: flex; align-items: center; gap: 8px; height: 36px; }
+    .check-row input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+    .check-row span { font-size: 0.85rem; }
+
+    /* Search */
+    .search-bar { margin-bottom: 12px; }
+    .search-bar input { width: 280px; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 7px 12px; font-size: 0.875rem; }
+    .search-bar input:focus { border-color: var(--accent); outline: none; }
+
+    @media (max-width: 800px) {
+      .form-grid { grid-template-columns: 1fr 1fr; }
+      table { font-size: 0.8rem; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">⚡ Dashboard de Métricas Ágiles</div>
+  <div class="nav-controls">
+    <a href="/dashboard" class="btn btn-ghost">← Dashboard</a>
+    <a href="/logout" class="btn btn-ghost">Salir</a>
+  </div>
+</nav>
+
+<main>
+  <div class="page-header">
+    <div>
+      <h1>Administración de Proyectos</h1>
+      <p>Activa o desactiva proyectos para controlar cuáles aparecen en el dashboard.</p>
+    </div>
+    <div style="color:var(--muted);font-size:0.85rem">
+      {{ projects | selectattr('active') | list | length }} activos · {{ projects | length }} total
+    </div>
+  </div>
+
+  {% if flash %}
+  <div class="flash flash-{{ flash.type }}">{{ flash.msg }}</div>
+  {% endif %}
+
+  <div class="card">
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
+      <div class="search-bar">
+        <input type="text" id="search" placeholder="🔍  Buscar proyecto..." oninput="filterTable(this.value)" />
+      </div>
+    </div>
+    <table id="projects-table">
+      <thead>
+        <tr>
+          <th>Clave</th>
+          <th>Nombre</th>
+          <th>Board ID</th>
+          <th>Tipo</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in projects %}
+        <tr data-key="{{ p.key }}" data-name="{{ p.name | lower }}">
+          <td><strong>{{ p.key }}</strong></td>
+          <td>{{ p.name }}</td>
+          <td style="color:var(--muted)">{{ p.board_id or '—' }}</td>
+          <td>
+            <span class="badge {% if p.is_kanban %}badge-kanban{% else %}badge-scrum{% endif %}">
+              {{ 'Kanban' if p.is_kanban else 'Scrum' }}
+            </span>
+          </td>
+          <td>
+            <span class="badge {% if p.active %}badge-active{% else %}badge-inactive{% endif %}">
+              {{ 'Activo' if p.active else 'Inactivo' }}
+            </span>
+          </td>
+          <td>
+            <div class="actions">
+              <form method="post" action="/admin/projects/{{ p.key }}/toggle" style="display:inline">
+                <label class="toggle" title="{{ 'Desactivar' if p.active else 'Activar' }}">
+                  <input type="checkbox" {% if p.active %}checked{% endif %} onchange="this.form.submit()">
+                  <span class="slider"></span>
+                </label>
+              </form>
+              {% if p.active %}
+              <a href="/dashboard?project={{ p.key }}" class="btn btn-sm" title="Ver dashboard">↗</a>
+              <form method="post" action="/admin/projects/{{ p.key }}/sync-now" style="display:inline">
+                <button class="btn btn-sm" title="Sincronizar ahora">↻</button>
+              </form>
+              {% endif %}
+              <form method="post" action="/admin/projects/{{ p.key }}/delete"
+                onsubmit="return confirm('¿Eliminar {{ p.key }} y todos sus datos? Esta acción no se puede deshacer.')">
+                <button class="btn btn-sm btn-danger" title="Eliminar permanentemente">✕</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Agregar proyecto -->
+  <div class="add-card">
+    <h2>Agregar proyecto</h2>
+    <form method="post" action="/admin/projects/add">
+      <div class="form-grid">
+        <div class="field">
+          <label>Clave Jira</label>
+          <input type="text" name="key" placeholder="OLP" required maxlength="20" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Nombre</label>
+          <input type="text" name="name" placeholder="Nombre del proyecto" required>
+        </div>
+        <div class="field">
+          <label>Board ID</label>
+          <input type="number" name="board_id" placeholder="2" required min="1">
+        </div>
+        <div class="field-check">
+          <label>Tipo</label>
+          <div class="check-row">
+            <input type="checkbox" name="is_kanban" id="is_kanban">
+            <span>Kanban</span>
+          </div>
+        </div>
+        <div class="field" style="display:flex;align-items:flex-end">
+          <button type="submit" class="btn btn-accent" style="width:100%">+ Agregar</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</main>
+
+<script>
+  function filterTable(q) {
+    q = q.toLowerCase();
+    document.querySelectorAll('#projects-table tbody tr').forEach(row => {
+      const key = row.dataset.key.toLowerCase();
+      const name = row.dataset.name;
+      row.style.display = (key.includes(q) || name.includes(q)) ? '' : 'none';
+    });
+  }
+</script>
+</body>
+</html>

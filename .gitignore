@@ -1,0 +1,41 @@
+# Secretos — NUNCA subir
+secrets/
+*.txt.secret
+
+# Base de datos local
+*.db
+*.sqlite3
+
+# Logs
+logs/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Output generado
+output/
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Variables de entorno locales
+.env
+.env.*

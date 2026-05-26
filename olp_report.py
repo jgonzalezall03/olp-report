@@ -27,13 +27,18 @@ import numpy as np
 
 # ─── Configuracion ───────────────────────────────────────────────────────────
 
-ATLASSIAN_SITE = "https://aurusjoyeria.atlassian.net"
-ATLASSIAN_EMAIL = "agonzalez@nxtara.com"
-with open(os.path.expanduser("~/.config/opencode/atlassian-token.txt")) as f:
-    ATLASSIAN_TOKEN = f.read().strip()
+ATLASSIAN_SITE = os.getenv("ATLASSIAN_SITE", "https://aurusjoyeria.atlassian.net")
+ATLASSIAN_EMAIL = os.getenv("ATLASSIAN_EMAIL", "agonzalez@nxtara.com")
+ATLASSIAN_TOKEN = os.getenv("ATLASSIAN_TOKEN")
+if not ATLASSIAN_TOKEN:
+    token_file = os.getenv("ATLASSIAN_TOKEN_FILE", "~/.config/opencode/atlassian-token.txt")
+    token_path = os.path.expanduser(token_file)
+    if os.path.exists(token_path):
+        with open(token_path, "r", encoding="utf-8") as f:
+            ATLASSIAN_TOKEN = f.read().strip()
 
-BOARD_ID = 2
-PROJECT_KEY = "OLP"
+BOARD_ID = int(os.getenv("OLP_BOARD_ID", "2"))
+PROJECT_KEY = os.getenv("OLP_PROJECT_KEY", "OLP")
 MONTHS_BACK = 6
 STORY_POINTS_FIELD = "customfield_10016"
 SPRINT_FIELD = "customfield_10020"
@@ -103,7 +108,7 @@ class JiraClient:
                       f"resolution,updated,{STORY_POINTS_FIELD},{SPRINT_FIELD}",
             "maxResults": 200,
         }
-        return self._get_all(f"{self.base}/search/jql", params, key="issues")
+        return self._get_all(f"{self.base}/search", params, key="issues")
 
     def get_completed_with_changelogs(self, sprint_id):
         jql = f"project = {PROJECT_KEY} AND Sprint = {sprint_id} AND status IN (DONE, Terminado)"
@@ -124,7 +129,7 @@ class JiraClient:
                       f"{STORY_POINTS_FIELD},{SPRINT_FIELD}",
             "maxResults": 200,
         }
-        return self._get_all(f"{self.base}/search/jql", params, key="issues")
+        return self._get_all(f"{self.base}/search", params, key="issues")
 
 
 # ─── Metrics Calculator ──────────────────────────────────────────────────────

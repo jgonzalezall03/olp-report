@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kanban Dashboard · {{ selected_project.name }}</title>
+  <script src="https://cdn.plot.ly/plotly-2.29.1.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a; --border: #2e3250;
+      --accent: #0ea5e9; --green: #10b981; --warn: #f59e0b; --danger: #ef4444;
+      --text: #e2e8f0; --muted: #64748b; --radius: 14px;
+    }
+    body { font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    nav {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-brand { font-size: 1rem; font-weight: 700; color: var(--accent); white-space: nowrap; }
+    .nav-badge { font-size: 0.7rem; background: var(--accent); color: white; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+    .nav-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+    select, .btn {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 6px 12px; font-size: 0.85rem; cursor: pointer;
+    }
+    select:hover, select:focus { border-color: var(--accent); outline: none; }
+    .btn { font-weight: 600; transition: opacity .15s; }
+    .btn-accent { background: var(--accent); border-color: var(--accent); color: white; }
+    .btn-accent:hover { opacity: .85; }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+    .seg { display: flex; gap: 2px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+    .seg-btn { background: transparent; border: none; color: var(--muted); border-radius: 6px; padding: 4px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all .15s; }
+    .seg-btn.active { background: var(--accent); color: white; }
+    main { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+    .project-header { margin-bottom: 16px; display: flex; align-items: baseline; gap: 12px; }
+    .project-header h1 { font-size: 1.4rem; font-weight: 700; }
+    .project-header span { color: var(--muted); font-size: 0.85rem; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+    .kpi-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 16px 18px; position: relative; overflow: hidden;
+    }
+    .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--kpi-color, var(--accent)); }
+    .kpi-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+    .kpi-value { font-size: 1.8rem; font-weight: 700; line-height: 1; }
+    .kpi-sub { font-size: 0.75rem; margin-top: 5px; }
+    .up { color: var(--green); } .down { color: var(--danger); } .neutral { color: var(--muted); }
+    .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+    .chart-card h3 { font-size: 0.88rem; font-weight: 600; margin-bottom: 2px; }
+    .chart-card p { font-size: 0.72rem; color: var(--muted); margin-bottom: 12px; }
+    .chart-box { width: 100%; height: 280px; }
+    /* Aging table */
+    .aging-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .aging-table th { color: var(--muted); font-weight: 600; text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+    .aging-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); }
+    .aging-table tr:last-child td { border-bottom: none; }
+    .age-pill { display: inline-block; padding: 2px 8px; border-radius: 20px; font-weight: 600; font-size: 0.75rem; }
+    .age-ok { background: rgba(16,185,129,.15); color: #10b981; }
+    .age-warn { background: rgba(245,158,11,.15); color: #f59e0b; }
+    .age-crit { background: rgba(239,68,68,.15); color: #ef4444; }
+    .aging-scroll { max-height: 260px; overflow-y: auto; }
+    .empty { text-align: center; padding: 80px 20px; color: var(--muted); }
+    @media (max-width: 1000px) { .kpi-grid { grid-template-columns: repeat(3,1fr); } .charts-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 600px) { .kpi-grid { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+<nav>
+  <div class="nav-brand">⚡ Dashboard de Métricas Ágiles</div>
+  <span class="nav-badge">KANBAN</span>
+  <div class="nav-controls">
+    <select id="project-select" onchange="changeProject()">
+      {% for p in projects %}
+        <option value="{{ p.key }}" {% if selected_project and selected_project.key == p.key %}selected{% endif %}>
+          {{ p.name }} ({{ p.key }})
+        </option>
+      {% endfor %}
+    </select>
+    <div class="seg">
+      <button class="seg-btn active" data-months="3" onclick="setRange(3)">3M</button>
+      <button class="seg-btn" data-months="6" onclick="setRange(6)">6M</button>
+    </div>
+    <button class="btn btn-accent" onclick="syncProject()">↻ Sync</button>
+    <a href="/admin/projects" class="btn btn-ghost">⚙ Proyectos</a>
+    <a href="/logout" class="btn btn-ghost">Salir</a>
+  </div>
+</nav>
+
+<main>
+{% if selected_project %}
+<div class="project-header">
+  <h1>{{ selected_project.name }}</h1>
+  <span>{{ selected_project.key }} · Kanban · {{ request.session.user }}</span>
+</div>
+
+<div class="kpi-grid">
+  <div class="kpi-card" style="--kpi-color:#0ea5e9">
+    <div class="kpi-label">Throughput / mes</div>
+    <div class="kpi-value" id="kpi-tp">—</div>
+    <div class="kpi-sub neutral" id="kpi-tp-sub"></div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:#f59e0b">
+    <div class="kpi-label">Lead Time prom.</div>
+    <div class="kpi-value" id="kpi-lead">—</div>
+    <div class="kpi-sub neutral" id="kpi-lead-sub"></div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:#ef4444">
+    <div class="kpi-label">Cycle Time prom.</div>
+    <div class="kpi-value" id="kpi-cycle">—</div>
+    <div class="kpi-sub neutral" id="kpi-cycle-sub"></div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:#10b981">
+    <div class="kpi-label">Flow Efficiency</div>
+    <div class="kpi-value" id="kpi-flow">—</div>
+    <div class="kpi-sub neutral" id="kpi-flow-sub">cycle / lead × 100</div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:#a855f7">
+    <div class="kpi-label">WIP actual</div>
+    <div class="kpi-value" id="kpi-wip">{{ wip_count }}</div>
+    <div class="kpi-sub neutral">ítems en curso ahora</div>
+  </div>
+</div>
+
+<div class="charts-grid">
+  <div class="chart-card">
+    <h3>Throughput mensual</h3>
+    <p>Ítems completados por mes con tendencia</p>
+    <div id="chart-tp" class="chart-box"></div>
+  </div>
+  <div class="chart-card">
+    <h3>Lead Time & Cycle Time</h3>
+    <p>Días promedio por mes · banda = rango</p>
+    <div id="chart-times" class="chart-box"></div>
+  </div>
+  <div class="chart-card">
+    <h3>Flow Efficiency</h3>
+    <p>% tiempo activo por mes · verde ≥ 40%</p>
+    <div id="chart-flow" class="chart-box"></div>
+  </div>
+  <div class="chart-card">
+    <h3>Aging WIP — ítems en curso</h3>
+    <p>Tiempo que lleva cada ítem activo sin cerrarse</p>
+    <div class="aging-scroll">
+      <table class="aging-table">
+        <thead><tr><th>Issue</th><th>Estado</th><th>Edad</th></tr></thead>
+        <tbody id="aging-body">
+          {% for item in wip_items %}
+          <tr>
+            <td>{{ item.key }} — {{ item.summary[:40] }}{% if item.summary|length > 40 %}…{% endif %}</td>
+            <td>{{ item.status }}</td>
+            <td>
+              <span class="age-pill {% if item.age_days > 30 %}age-crit{% elif item.age_days > 14 %}age-warn{% else %}age-ok{% endif %}">
+                {{ item.age_days }}d
+              </span>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" style="color:var(--muted);text-align:center;padding:20px">Sin ítems en curso</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% else %}
+<div class="empty"><h2>Sin proyecto seleccionado</h2></div>
+{% endif %}
+</main>
+
+<script>
+  const ALL = {{ metrics | safe }};
+  const PROJECT_KEY = "{{ selected_project.key if selected_project else '' }}";
+  let activeMonths = 3;
+
+  const L = { paper_bgcolor:'transparent', plot_bgcolor:'transparent', font:{color:'#e2e8f0',size:11},
+    margin:{t:8,r:12,b:48,l:44}, xaxis:{gridcolor:'#2e3250',tickangle:-30,tickfont:{size:10}},
+    yaxis:{gridcolor:'#2e3250'}, legend:{orientation:'h',y:-0.28,font:{size:10}}, showlegend:true };
+  const C = { displayModeBar:false, responsive:true };
+
+  function avg(arr) {
+    const v = arr.filter(x=>x!=null&&x>0);
+    return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null;
+  }
+
+  function trend(y) {
+    const n=y.length; if(n<2) return y;
+    const mx=(n-1)/2, my=avg(y)||0;
+    const num=y.reduce((s,v,i)=>s+(i-mx)*(v-my),0);
+    const den=y.reduce((s,_,i)=>s+(i-mx)**2,0);
+    const sl=den?num/den:0, ic=my-sl*mx;
+    return y.map((_,i)=>+Math.max(0,sl*i+ic).toFixed(1));
+  }
+
+  function delta(curr, prev, unit='', lowerBetter=false) {
+    if(curr==null||prev==null) return '<span class="neutral">sin ref.</span>';
+    const d=curr-prev, pct=prev?((d/prev)*100).toFixed(1):null;
+    const good=lowerBetter?d<0:d>0;
+    const cls=d===0?'neutral':good?'up':'down';
+    const lbl=pct!=null?`${d>0?'+':''}${pct}%`:`${d>0?'+':''}${d.toFixed(1)}${unit}`;
+    return `<span class="${cls}">${d>0?'↑':'↓'} ${lbl} vs anterior</span>`;
+  }
+
+  function filterMonths(data, months) {
+    const cut=new Date(); cut.setMonth(cut.getMonth()-months);
+    return data.filter(m=>!m.sprint_start_date||new Date(m.sprint_start_date)>=cut);
+  }
+
+  function monthLabel(k) {
+    if(k==='Sin fecha') return k;
+    const [y,mo]=k.split('-');
+    return new Date(y,mo-1).toLocaleDateString('es',{month:'short',year:'2-digit'});
+  }
+
+  function render(months) {
+    const data = filterMonths(ALL, months);
+    if (!data.length) return;
+
+    const keys   = [...new Set(data.map(m=>m.sprint_start_date?m.sprint_start_date.slice(0,7):'Sin fecha'))].sort();
+    const byM    = {};
+    for (const m of data) { const k=m.sprint_start_date?m.sprint_start_date.slice(0,7):'Sin fecha'; (byM[k]=byM[k]||[]).push(m); }
+    const labels = keys.map(monthLabel);
+
+    const tp    = keys.map(k=>byM[k].reduce((s,m)=>s+m.completed,0));
+    const lead  = keys.map(k=>avg(byM[k].map(m=>m.lead_time_avg)));
+    const cycle = keys.map(k=>avg(byM[k].map(m=>m.cycle_time_avg)));
+    const flow  = keys.map((_,i)=>{const l=lead[i],c=cycle[i]; return l&&c&&l>0?+((c/l)*100).toFixed(1):null;});
+    const tr    = trend(tp);
+
+    const last=keys.length-1, prev=keys.length-2;
+    document.getElementById('kpi-tp').textContent = avg(tp)!=null?avg(tp).toFixed(0):'—';
+    document.getElementById('kpi-tp-sub').innerHTML = delta(tp[last],tp[prev]);
+    document.getElementById('kpi-lead').textContent = avg(lead)!=null?avg(lead).toFixed(1)+'d':'—';
+    document.getElementById('kpi-lead-sub').innerHTML = delta(lead[last],lead[prev],'d',true);
+    document.getElementById('kpi-cycle').textContent = avg(cycle)!=null?avg(cycle).toFixed(1)+'d':'—';
+    document.getElementById('kpi-cycle-sub').innerHTML = delta(cycle[last],cycle[prev],'d',true);
+    const avgFlow = avg(flow);
+    document.getElementById('kpi-flow').textContent = avgFlow!=null?avgFlow.toFixed(0)+'%':'—';
+    document.getElementById('kpi-flow-sub').innerHTML = delta(flow[last],flow[prev],'%');
+
+    // Chart 1: Throughput
+    Plotly.react('chart-tp',[
+      { x:labels, y:tp, type:'bar', name:'Completados',
+        marker:{color:tp.map((v,i)=>v>=tr[i]?'#0ea5e9':'#1e3a5f')} },
+      { x:labels, y:tr, type:'scatter', mode:'lines', name:'Tendencia',
+        line:{color:'#f59e0b',width:2,dash:'dot'} },
+    ],{...L, yaxis:{...L.yaxis,title:'Ítems'}},C);
+
+    // Chart 2: Lead & Cycle con banda
+    const lMax=lead.map(v=>v!=null?v*1.2:null), lMin=lead.map(v=>v!=null?v*0.8:null);
+    Plotly.react('chart-times',[
+      { x:[...labels,...labels.slice().reverse()], y:[...lMax,...lMin.slice().reverse()],
+        fill:'toself', fillcolor:'rgba(245,158,11,0.1)', line:{color:'transparent'},
+        showlegend:false, hoverinfo:'skip' },
+      { x:labels, y:lead, type:'scatter', mode:'lines+markers', name:'Lead Time',
+        line:{color:'#f59e0b',width:2}, marker:{size:5} },
+      { x:labels, y:cycle, type:'scatter', mode:'lines+markers', name:'Cycle Time',
+        line:{color:'#ef4444',width:2}, marker:{size:5} },
+    ],{...L, yaxis:{...L.yaxis,title:'Días'}},C);
+
+    // Chart 3: Flow Efficiency
+    Plotly.react('chart-flow',[
+      { x:labels, y:flow, type:'bar', name:'Flow Efficiency',
+        marker:{color:flow.map(v=>v==null?'#2e3250':v>=40?'#10b981':v>=20?'#f59e0b':'#ef4444')},
+        text:flow.map(v=>v!=null?v+'%':''), textposition:'outside', textfont:{size:10} },
+      { x:labels, y:Array(labels.length).fill(40), type:'scatter', mode:'lines',
+        name:'Objetivo 40%', line:{color:'#0ea5e9',width:1.5,dash:'dash'} },
+    ],{...L, yaxis:{...L.yaxis,title:'%',range:[0,115],ticksuffix:'%'}},C);
+  }
+
+  function setRange(m) {
+    activeMonths=m;
+    document.querySelectorAll('[data-months]').forEach(b=>b.classList.toggle('active',+b.dataset.months===m));
+    render(m);
+  }
+
+  function changeProject() {
+    window.location.href=`/dashboard?project=${document.getElementById('project-select').value}`;
+  }
+
+  async function syncProject() {
+    if(!PROJECT_KEY) return;
+    const btn=document.querySelector('.btn-accent');
+    btn.textContent='…'; btn.disabled=true;
+    try {
+      await fetch(`/api/projects/${PROJECT_KEY}/sync/`,{method:'POST'});
+      btn.textContent='✓ En cola';
+      setTimeout(()=>{btn.textContent='↻ Sync';btn.disabled=false;},2000);
+    } catch { btn.textContent='↻ Sync'; btn.disabled=false; }
+  }
+
+  if(ALL.length) render(activeMonths);
+</script>
+</body>
+</html>
