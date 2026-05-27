@@ -78,17 +78,29 @@ def sync_project(project_key: str):
         session.close()
 
 
+def _fetch_project_name(project_key: str, board_id: int) -> str:
+    try:
+        client = JiraClient()
+        board = client._get(client.agile_base + f"/board/{board_id}")
+        return board.get("location", {}).get("projectName") or board.get("name") or project_key
+    except Exception:
+        return project_key
+
+
 def create_project(project_key: str, board_id: int, name: str | None = None, is_kanban: bool = False):
     session = db.SessionLocal()
     try:
         project = session.query(JiraProject).filter(JiraProject.key == project_key).first()
+        resolved_name = name or _fetch_project_name(project_key, board_id)
         if not project:
-            project = JiraProject(key=project_key, name=name or project_key, board_id=board_id, is_kanban=is_kanban)
+            project = JiraProject(key=project_key, name=resolved_name, board_id=board_id, is_kanban=is_kanban)
             session.add(project)
             session.commit()
-        elif project.board_id != board_id or project.is_kanban != is_kanban:
+        elif project.board_id != board_id or project.is_kanban != is_kanban or project.name == project_key:
             project.board_id = board_id
             project.is_kanban = is_kanban
+            if project.name == project_key:
+                project.name = resolved_name
             session.commit()
         return project
     finally:
@@ -100,10 +112,11 @@ def main() -> None:
     parser.add_argument("--project-key", required=True)
     parser.add_argument("--board-id", type=int, required=True)
     parser.add_argument("--project-name", type=str, help="Display name for the project")
+    parser.add_argument("--kanban", action="store_true", help="Mark project as Kanban")
     args = parser.parse_args()
 
     init_db()
-    create_project(args.project_key, args.board_id, args.project_name)
+    create_project(args.project_key, args.board_id, args.project_name, is_kanban=args.kanban)
     print(sync_project(args.project_key))
 
 

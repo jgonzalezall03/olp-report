@@ -150,14 +150,15 @@ class JiraClient:
         }
         return self._cached_ip_ids
 
-    def compute_kanban_metrics(self, project_key, story_points_field, months_back=6):
+    def compute_kanban_metrics(self, project_key, story_points_field, months_back=12):
         """Agrupa issues resueltas por mes para proyectos Kanban (sin sprints)."""
         cutoff = datetime.now(timezone.utc) - timedelta(days=months_back * 30 + 15)
         cutoff_str = cutoff.strftime("%Y-%m-%d")
 
         # Traer todas las issues con changelog para calcular cycle time
+        DONE_STATUSES = {"Done", "Terminado", "Finalizada", "Closed", "Cerrado", "Resuelto", "Resolved"}
         params = {
-            "jql": f"project = {project_key} AND statusCategory = Done AND updated >= '{cutoff_str}' ORDER BY updated ASC",
+            "jql": f"project = {project_key} AND status in ({','.join(repr(s) for s in DONE_STATUSES)}) AND updated >= '{cutoff_str}' ORDER BY updated ASC",
             "fields": f"created,resolutiondate,status,updated,{story_points_field}",
             "expand": "changelog",
             "maxResults": 200,
@@ -178,11 +179,13 @@ class JiraClient:
             if not closed_date:
                 for entry in reversed(issue.get("changelog", {}).get("histories", [])):
                     for item in entry.get("items", []):
-                        if item.get("field") == "status" and item.get("toStatusCategory") == "Done":
+                        if item.get("field") == "status" and item.get("toString", "") in DONE_STATUSES:
                             closed_date = parse_date(entry.get("created"))
                             break
                     if closed_date:
                         break
+            if not closed_date:
+                closed_date = parse_date(fields.get("updated"))
 
             if not closed_date or closed_date < cutoff:
                 continue

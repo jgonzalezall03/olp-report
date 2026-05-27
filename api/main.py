@@ -73,7 +73,83 @@ def get_db():
 
 @app.get("/", include_in_schema=False)
 def home():
-    return RedirectResponse(url="/dashboard")
+    return RedirectResponse(url="/home")
+
+
+@app.get("/home", response_class=HTMLResponse)
+def home_view(request: Request, db: Session = Depends(get_db)):
+    if not require_login(request):
+        return RedirectResponse(url="/login")
+
+    projects = db.query(JiraProject).filter(JiraProject.active.is_(True)).order_by(JiraProject.name).all()
+
+    from datetime import datetime, timedelta, timezone
+    cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+
+    rows = []
+    for p in projects:
+        snaps = (
+            db.query(MetricsSnapshot)
+            .filter(
+                MetricsSnapshot.project_id == p.id,
+                MetricsSnapshot.sprint_start_date >= cutoff,
+            )
+            .order_by(MetricsSnapshot.sprint_start_date.asc().nullslast())
+            .all()
+        )
+        if not snaps:
+            snaps = (
+                db.query(MetricsSnapshot)
+                .filter(MetricsSnapshot.project_id == p.id)
+                .order_by(MetricsSnapshot.sprint_start_date.desc().nullslast())
+                .limit(3)
+                .all()
+            )
+            snaps = list(reversed(snaps))
+
+        if not snaps:
+            rows.append({"project": p, "empty": True})
+            continue
+
+        def _avg(vals):
+            v = [x for x in vals if x is not None]
+            return round(sum(v) / len(v), 1) if v else None
+
+        last = snaps[-1]
+        prev = snaps[-2] if len(snaps) >= 2 else None
+
+        throughput = _avg([s.completed for s in snaps])
+        lead       = _avg([s.lead_time_avg for s in snaps])
+        cycle      = _avg([s.cycle_time_avg for s in snaps])
+        flow       = round(cycle / lead * 100, 0) if lead and cycle else None
+        bugs       = _avg([s.bugs_count for s in snaps])
+        velocity   = _avg([s.velocity for s in snaps])
+
+        def _trend(curr, prev_val, lower_better=False):
+            if curr is None or prev_val is None:
+                return "neutral"
+            if curr == prev_val:
+                return "neutral"
+            better = curr < prev_val if lower_better else curr > prev_val
+            return "up" if better else "down"
+
+        rows.append({
+            "project": p,
+            "empty": False,
+            "periods": len(snaps),
+            "last_period": last.sprint_name,
+            "throughput": throughput,
+            "throughput_trend": _trend(last.completed, prev.completed if prev else None),
+            "lead": lead,
+            "lead_trend": _trend(last.lead_time_avg, prev.lead_time_avg if prev else None, lower_better=True),
+            "cycle": cycle,
+            "cycle_trend": _trend(last.cycle_time_avg, prev.cycle_time_avg if prev else None, lower_better=True),
+            "flow": flow,
+            "bugs": bugs,
+            "velocity": velocity,
+        })
+
+    return render_template("home.html", {"request": request, "rows": rows})
 
 
 @app.get("/login", response_class=HTMLResponse)

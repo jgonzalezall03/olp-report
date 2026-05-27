@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Resumen · Dashboard de Métricas</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a; --border: #2e3250;
+      --accent: #6366f1; --green: #10b981; --warn: #f59e0b; --danger: #ef4444;
+      --text: #e2e8f0; --muted: #64748b; --radius: 12px;
+    }
+    body { font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    nav {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-brand { font-size: 1rem; font-weight: 700; color: var(--accent); }
+    .nav-controls { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+    .btn {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 6px 14px; font-size: 0.85rem; font-weight: 600;
+      cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .8; }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+    main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+
+    .page-header { margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    .page-header h1 { font-size: 1.3rem; font-weight: 700; }
+    .page-header p { color: var(--muted); font-size: 0.85rem; margin-top: 3px; }
+
+    /* Summary KPI strip */
+    .summary-strip { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .strip-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 14px 20px; flex: 1; min-width: 140px;
+    }
+    .strip-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+    .strip-value { font-size: 1.5rem; font-weight: 700; }
+
+    /* Search */
+    .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+    .search-input {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 7px 12px; font-size: 0.875rem; width: 260px;
+    }
+    .search-input:focus { border-color: var(--accent); outline: none; }
+    .filter-btn {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+      border-radius: 8px; padding: 6px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+      transition: all .15s;
+    }
+    .filter-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(99,102,241,.1); }
+
+    /* Table */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      padding: 11px 14px; text-align: left; font-size: 0.72rem; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .05em;
+      border-bottom: 1px solid var(--border); background: var(--surface2);
+      white-space: nowrap; cursor: pointer; user-select: none;
+    }
+    thead th:hover { color: var(--text); }
+    thead th .sort-icon { opacity: .4; margin-left: 4px; }
+    thead th.sorted .sort-icon { opacity: 1; color: var(--accent); }
+    tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 0.875rem; vertical-align: middle; }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--surface2); cursor: pointer; }
+
+    .project-name { font-weight: 600; }
+    .project-key { font-size: 0.75rem; color: var(--muted); margin-top: 1px; }
+
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
+    .badge-scrum { background: rgba(99,102,241,.15); color: #818cf8; }
+    .badge-kanban { background: rgba(14,165,233,.15); color: #38bdf8; }
+
+    .kpi-cell { text-align: right; font-variant-numeric: tabular-nums; }
+    .kpi-val { font-weight: 600; }
+    .kpi-trend { font-size: 0.72rem; margin-top: 2px; }
+    .up   { color: var(--green); }
+    .down { color: var(--danger); }
+    .neutral { color: var(--muted); }
+
+    .bar-wrap { display: flex; align-items: center; gap: 8px; }
+    .bar-bg { flex: 1; height: 6px; background: var(--surface2); border-radius: 3px; min-width: 60px; }
+    .bar-fill { height: 100%; border-radius: 3px; transition: width .3s; }
+
+    .flow-pill {
+      display: inline-block; padding: 2px 10px; border-radius: 20px;
+      font-size: 0.78rem; font-weight: 700;
+    }
+    .flow-good  { background: rgba(16,185,129,.15); color: #10b981; }
+    .flow-warn  { background: rgba(245,158,11,.15);  color: #f59e0b; }
+    .flow-bad   { background: rgba(239,68,68,.15);   color: #ef4444; }
+    .flow-none  { background: var(--surface2); color: var(--muted); }
+
+    .empty-row td { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 16px; }
+
+    .period-tag { font-size: 0.72rem; color: var(--muted); }
+
+    @media (max-width: 900px) {
+      .col-hide { display: none; }
+      .search-input { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">⚡ Dashboard de Métricas Ágiles</div>
+  <div class="nav-controls">
+    <a href="/admin/projects" class="btn btn-ghost">⚙ Proyectos</a>
+    <a href="/logout" class="btn btn-ghost">Salir</a>
+  </div>
+</nav>
+
+<main>
+  <div class="page-header">
+    <div>
+      <h1>Resumen de Proyectos</h1>
+      <p>KPIs principales de los últimos 3 meses · haz clic en un proyecto para ver su dashboard</p>
+    </div>
+  </div>
+
+  {% set active_rows = rows | selectattr('empty', 'equalto', False) | list %}
+
+  <!-- Summary strip -->
+  <div class="summary-strip">
+    <div class="strip-card">
+      <div class="strip-label">Proyectos activos</div>
+      <div class="strip-value">{{ rows | length }}</div>
+    </div>
+    <div class="strip-card">
+      <div class="strip-label">Con datos</div>
+      <div class="strip-value">{{ active_rows | length }}</div>
+    </div>
+    <div class="strip-card">
+      <div class="strip-label">Throughput promedio</div>
+      <div class="strip-value">
+        {% set tp_vals = active_rows | map(attribute='throughput') | select('ne', None) | list %}
+        {% if tp_vals %}{{ (tp_vals | sum / tp_vals | length) | round(0) | int }}{% else %}—{% endif %}
+      </div>
+    </div>
+    <div class="strip-card">
+      <div class="strip-label">Lead Time promedio</div>
+      <div class="strip-value">
+        {% set lt_vals = active_rows | map(attribute='lead') | select('ne', None) | list %}
+        {% if lt_vals %}{{ (lt_vals | sum / lt_vals | length) | round(1) }}d{% else %}—{% endif %}
+      </div>
+    </div>
+    <div class="strip-card">
+      <div class="strip-label">Flow Efficiency prom.</div>
+      <div class="strip-value">
+        {% set fe_vals = active_rows | map(attribute='flow') | select('ne', None) | list %}
+        {% if fe_vals %}{{ (fe_vals | sum / fe_vals | length) | round(0) | int }}%{% else %}—{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <input type="text" class="search-input" id="search" placeholder="🔍  Buscar proyecto..." oninput="filterTable()" />
+    <button class="filter-btn active" data-filter="all" onclick="setFilter('all', this)">Todos</button>
+    <button class="filter-btn" data-filter="scrum" onclick="setFilter('scrum', this)">Scrum</button>
+    <button class="filter-btn" data-filter="kanban" onclick="setFilter('kanban', this)">Kanban</button>
+  </div>
+
+  <div class="card">
+    <table id="projects-table">
+      <thead>
+        <tr>
+          <th onclick="sortTable(0)">Proyecto <span class="sort-icon">↕</span></th>
+          <th onclick="sortTable(1)">Tipo <span class="sort-icon">↕</span></th>
+          <th onclick="sortTable(2)" class="kpi-cell">Throughput <span class="sort-icon">↕</span></th>
+          <th onclick="sortTable(3)" class="kpi-cell col-hide">Velocity <span class="sort-icon">↕</span></th>
+          <th onclick="sortTable(4)" class="kpi-cell">Lead Time <span class="sort-icon">↕</span></th>
+          <th onclick="sortTable(5)" class="kpi-cell">Cycle Time <span class="sort-icon">↕</span></th>
+          <th onclick="sortTable(6)" class="kpi-cell">Flow Eff. <span class="sort-icon">↕</span></th>
+          <th onclick="sortTable(7)" class="kpi-cell col-hide">Bugs/período <span class="sort-icon">↕</span></th>
+          <th class="col-hide">Último período</th>
+        </tr>
+      </thead>
+      <tbody id="table-body">
+        {% for row in rows %}
+        <tr
+          data-type="{{ 'kanban' if row.project.is_kanban else 'scrum' }}"
+          data-name="{{ row.project.name | lower }} {{ row.project.key | lower }}"
+          onclick="window.location='/dashboard?project={{ row.project.key }}'"
+        >
+          <td>
+            <div class="project-name">{{ row.project.name }}</div>
+            <div class="project-key">{{ row.project.key }}</div>
+          </td>
+          <td>
+            <span class="badge {{ 'badge-kanban' if row.project.is_kanban else 'badge-scrum' }}">
+              {{ 'Kanban' if row.project.is_kanban else 'Scrum' }}
+            </span>
+          </td>
+
+          {% if row.empty %}
+          <td colspan="7" class="empty-row" style="text-align:left;color:var(--muted)">Sin datos sincronizados</td>
+          {% else %}
+
+          <!-- Throughput -->
+          <td class="kpi-cell" data-val="{{ row.throughput or 0 }}">
+            {% if row.throughput is not none %}
+            <div class="bar-wrap">
+              <div class="bar-bg"><div class="bar-fill" style="width:{{ [row.throughput * 3, 100] | min }}%;background:var(--accent)"></div></div>
+              <span class="kpi-val">{{ row.throughput | int }}</span>
+            </div>
+            <div class="kpi-trend {{ row.throughput_trend }}">
+              {% if row.throughput_trend == 'up' %}↑ mejor{% elif row.throughput_trend == 'down' %}↓ bajó{% else %}—{% endif %}
+            </div>
+            {% else %}<span class="neutral">—</span>{% endif %}
+          </td>
+
+          <!-- Velocity -->
+          <td class="kpi-cell col-hide" data-val="{{ row.velocity or 0 }}">
+            {% if row.velocity is not none and not row.project.is_kanban %}
+              <span class="kpi-val">{{ row.velocity | int }}</span> pts
+            {% else %}<span class="neutral">—</span>{% endif %}
+          </td>
+
+          <!-- Lead Time -->
+          <td class="kpi-cell" data-val="{{ row.lead or 9999 }}">
+            {% if row.lead is not none %}
+            <span class="kpi-val">{{ row.lead }}d</span>
+            <div class="kpi-trend {{ row.lead_trend }}">
+              {% if row.lead_trend == 'up' %}↓ mejor{% elif row.lead_trend == 'down' %}↑ subió{% else %}—{% endif %}
+            </div>
+            {% else %}<span class="neutral">—</span>{% endif %}
+          </td>
+
+          <!-- Cycle Time -->
+          <td class="kpi-cell" data-val="{{ row.cycle or 9999 }}">
+            {% if row.cycle is not none %}
+            <span class="kpi-val">{{ row.cycle }}d</span>
+            <div class="kpi-trend {{ row.cycle_trend }}">
+              {% if row.cycle_trend == 'up' %}↓ mejor{% elif row.cycle_trend == 'down' %}↑ subió{% else %}—{% endif %}
+            </div>
+            {% else %}<span class="neutral">—</span>{% endif %}
+          </td>
+
+          <!-- Flow Efficiency -->
+          <td class="kpi-cell" data-val="{{ row.flow or 0 }}">
+            {% if row.flow is not none %}
+            <span class="flow-pill {{ 'flow-good' if row.flow >= 40 else ('flow-warn' if row.flow >= 20 else 'flow-bad') }}">
+              {{ row.flow | int }}%
+            </span>
+            {% else %}<span class="flow-pill flow-none">—</span>{% endif %}
+          </td>
+
+          <!-- Bugs -->
+          <td class="kpi-cell col-hide" data-val="{{ row.bugs or 0 }}">
+            {% if row.bugs is not none and row.bugs > 0 %}
+            <span class="kpi-val" style="color:{{ 'var(--danger)' if row.bugs > 5 else ('var(--warn)' if row.bugs > 2 else 'var(--green)') }}">
+              {{ row.bugs | round(1) }}
+            </span>
+            {% else %}<span class="neutral">0</span>{% endif %}
+          </td>
+
+          <!-- Último período -->
+          <td class="col-hide">
+            <span class="period-tag">{{ row.last_period }}</span>
+            <div style="font-size:0.7rem;color:var(--muted);margin-top:2px">{{ row.periods }} períodos</div>
+          </td>
+
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+  let activeFilter = 'all';
+  let sortCol = -1, sortAsc = true;
+
+  function filterTable() {
+    const q = document.getElementById('search').value.toLowerCase();
+    document.querySelectorAll('#table-body tr').forEach(row => {
+      const name = row.dataset.name || '';
+      const type = row.dataset.type || '';
+      const matchQ = name.includes(q);
+      const matchF = activeFilter === 'all' || type === activeFilter;
+      row.style.display = matchQ && matchF ? '' : 'none';
+    });
+  }
+
+  function setFilter(f, btn) {
+    activeFilter = f;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    filterTable();
+  }
+
+  function sortTable(col) {
+    const tbody = document.getElementById('table-body');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    if (sortCol === col) sortAsc = !sortAsc; else { sortCol = col; sortAsc = true; }
+
+    document.querySelectorAll('thead th').forEach((th, i) => {
+      th.classList.toggle('sorted', i === col);
+      const icon = th.querySelector('.sort-icon');
+      if (icon) icon.textContent = i === col ? (sortAsc ? '↑' : '↓') : '↕';
+    });
+
+    rows.sort((a, b) => {
+      const cellA = a.cells[col], cellB = b.cells[col];
+      if (!cellA || !cellB) return 0;
+      const valA = cellA.dataset.val !== undefined ? parseFloat(cellA.dataset.val) : cellA.textContent.trim().toLowerCase();
+      const valB = cellB.dataset.val !== undefined ? parseFloat(cellB.dataset.val) : cellB.textContent.trim().toLowerCase();
+      if (typeof valA === 'number' && typeof valB === 'number') return sortAsc ? valA - valB : valB - valA;
+      return sortAsc ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
+    });
+
+    rows.forEach(r => tbody.appendChild(r));
+  }
+</script>
+</body>
+</html>
