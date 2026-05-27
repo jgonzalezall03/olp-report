@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Assignees · {{ project.name }}</title>
+  <script src="https://cdn.plot.ly/plotly-2.29.1.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a; --border: #2e3250;
+      --accent: #6366f1; --green: #10b981; --warn: #f59e0b; --danger: #ef4444;
+      --text: #e2e8f0; --muted: #64748b; --radius: 12px;
+    }
+    body { font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    nav {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-brand { font-size: 1rem; font-weight: 700; color: var(--accent); }
+    .nav-controls { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    select, .btn {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 6px 12px; font-size: 0.85rem; cursor: pointer;
+    }
+    select:focus { border-color: var(--accent); outline: none; }
+    .btn { font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: opacity .15s; }
+    .btn:hover { opacity: .8; }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+    main { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+    .page-header { margin-bottom: 20px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .page-header h1 { font-size: 1.3rem; font-weight: 700; }
+    .page-header span { color: var(--muted); font-size: 0.85rem; }
+
+    /* KPI strip */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .kpi-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 16px 18px; position: relative; overflow: hidden;
+    }
+    .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--kpi-color, var(--accent)); }
+    .kpi-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+    .kpi-value { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+    .kpi-sub { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+
+    /* Charts */
+    .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+    .chart-card.wide { grid-column: span 2; }
+    .chart-card h3 { font-size: 0.88rem; font-weight: 600; margin-bottom: 2px; }
+    .chart-card p { font-size: 0.72rem; color: var(--muted); margin-bottom: 12px; }
+    .chart-box { width: 100%; height: 280px; }
+
+    /* Table */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .card-header { padding: 14px 16px; border-bottom: 1px solid var(--border); background: var(--surface2); display: flex; align-items: center; justify-content: space-between; }
+    .card-header h3 { font-size: 0.88rem; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { padding: 10px 14px; text-align: left; font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    tbody td { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--surface2); }
+
+    .bar-wrap { display: flex; align-items: center; gap: 8px; }
+    .bar-bg { flex: 1; height: 6px; background: var(--surface2); border-radius: 3px; min-width: 50px; }
+    .bar-fill { height: 100%; border-radius: 3px; }
+
+    .pill { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
+    .pill-green { background: rgba(16,185,129,.15); color: #10b981; }
+    .pill-warn  { background: rgba(245,158,11,.15);  color: #f59e0b; }
+    .pill-red   { background: rgba(239,68,68,.15);   color: #ef4444; }
+    .pill-muted { background: var(--surface2); color: var(--muted); }
+
+    .bottleneck-row { background: rgba(239,68,68,.05) !important; }
+    .bottleneck-row td:first-child { border-left: 3px solid var(--danger); }
+
+    .empty { text-align: center; padding: 60px; color: var(--muted); }
+
+    @media (max-width: 900px) {
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+      .charts-grid { grid-template-columns: 1fr; }
+      .chart-card.wide { grid-column: span 1; }
+    }
+  </style>
+</head>
+<body>
+<nav>
+  <div class="nav-brand">⚡ Dashboard de Métricas Ágiles</div>
+  <div class="nav-controls">
+    <select onchange="window.location='/assignees/'+this.value">
+      {% for p in projects %}
+      <option value="{{ p.key }}" {% if p.key == project.key %}selected{% endif %}>{{ p.name }} ({{ p.key }})</option>
+      {% endfor %}
+    </select>
+    <a href="/dashboard?project={{ project.key }}" class="btn btn-ghost">📊 Dashboard</a>
+    <a href="/home" class="btn btn-ghost">⌂ Inicio</a>
+    <a href="/logout" class="btn btn-ghost">Salir</a>
+  </div>
+</nav>
+
+<main>
+  <div class="page-header">
+    <h1>{{ project.name }}</h1>
+    <span>{{ project.key }} · Vista por Assignee</span>
+  </div>
+
+  <div class="kpi-grid" id="kpi-strip">
+    <div class="kpi-card" style="--kpi-color:#6366f1">
+      <div class="kpi-label">Personas activas</div>
+      <div class="kpi-value" id="kpi-people">—</div>
+      <div class="kpi-sub">con issues completadas</div>
+    </div>
+    <div class="kpi-card" style="--kpi-color:#10b981">
+      <div class="kpi-label">Mayor throughput</div>
+      <div class="kpi-value" id="kpi-top-tp">—</div>
+      <div class="kpi-sub" id="kpi-top-tp-name"></div>
+    </div>
+    <div class="kpi-card" style="--kpi-color:#f59e0b">
+      <div class="kpi-label">Menor Lead Time</div>
+      <div class="kpi-value" id="kpi-best-lead">—</div>
+      <div class="kpi-sub" id="kpi-best-lead-name"></div>
+    </div>
+    <div class="kpi-card" style="--kpi-color:#ef4444">
+      <div class="kpi-label">Posible cuello de botella</div>
+      <div class="kpi-value" id="kpi-bottleneck">—</div>
+      <div class="kpi-sub" id="kpi-bottleneck-sub">lead time más alto</div>
+    </div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card wide">
+      <h3>Throughput por persona y período</h3>
+      <p>Issues completadas · apiladas por assignee</p>
+      <div id="chart-tp" class="chart-box" style="height:300px"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Lead Time promedio por persona</h3>
+      <p>Días desde creación hasta cierre · menor es mejor</p>
+      <div id="chart-lead" class="chart-box"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Cycle Time promedio por persona</h3>
+      <p>Días desde inicio hasta cierre · menor es mejor</p>
+      <div id="chart-cycle" class="chart-box"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h3>Resumen por assignee — todos los períodos</h3>
+      <span style="font-size:0.75rem;color:var(--muted)">🔴 = posible cuello de botella (lead time &gt; 2× promedio)</span>
+    </div>
+    {% if data != '[]' %}
+    <table>
+      <thead>
+        <tr>
+          <th>Assignee</th>
+          <th>Throughput total</th>
+          <th>Lead Time prom.</th>
+          <th>Cycle Time prom.</th>
+          <th>Bugs</th>
+          <th>Períodos activo</th>
+        </tr>
+      </thead>
+      <tbody id="summary-table"></tbody>
+    </table>
+    {% else %}
+    <div class="empty">Sin datos. Sincroniza el proyecto primero.</div>
+    {% endif %}
+  </div>
+</main>
+
+<script>
+  const RAW = {{ data }};
+
+  const COLORS = [
+    '#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#a855f7',
+    '#ec4899','#14b8a6','#f97316','#84cc16','#06b6d4','#8b5cf6',
+  ];
+
+  const L = {
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    font:{color:'#e2e8f0', size:11},
+    margin:{t:8,r:12,b:48,l:44},
+    xaxis:{gridcolor:'#2e3250', tickangle:-30, tickfont:{size:10}},
+    yaxis:{gridcolor:'#2e3250'},
+    legend:{orientation:'h', y:-0.32, font:{size:10}},
+    showlegend:true,
+  };
+  const C = {displayModeBar:false, responsive:true};
+
+  function avg(arr) {
+    const v = arr.filter(x => x != null);
+    return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null;
+  }
+
+  // Aggregate by assignee
+  const byAssignee = {};
+  const periods = [...new Set(RAW.map(r => r.period))].sort();
+
+  for (const r of RAW) {
+    if (!byAssignee[r.assignee]) byAssignee[r.assignee] = {completed:0, lead_times:[], cycle_times:[], bugs:0, periods:new Set()};
+    const a = byAssignee[r.assignee];
+    a.completed += r.completed;
+    if (r.lead_time_avg != null) a.lead_times.push(r.lead_time_avg);
+    if (r.cycle_time_avg != null) a.cycle_times.push(r.cycle_time_avg);
+    a.bugs += r.bugs_count;
+    a.periods.add(r.period);
+  }
+
+  const assignees = Object.keys(byAssignee).sort((a,b) => byAssignee[b].completed - byAssignee[a].completed);
+
+  // KPIs
+  const allLeads = assignees.map(a => avg(byAssignee[a].lead_times)).filter(x=>x!=null);
+  const globalAvgLead = avg(allLeads);
+
+  document.getElementById('kpi-people').textContent = assignees.length;
+
+  const topTp = assignees[0];
+  if (topTp) {
+    document.getElementById('kpi-top-tp').textContent = byAssignee[topTp].completed;
+    document.getElementById('kpi-top-tp-name').textContent = topTp;
+  }
+
+  const bestLead = assignees.slice().sort((a,b) => (avg(byAssignee[a].lead_times)||999) - (avg(byAssignee[b].lead_times)||999))[0];
+  if (bestLead && avg(byAssignee[bestLead].lead_times) != null) {
+    document.getElementById('kpi-best-lead').textContent = avg(byAssignee[bestLead].lead_times).toFixed(1) + 'd';
+    document.getElementById('kpi-best-lead-name').textContent = bestLead;
+  }
+
+  const bottleneck = assignees.slice().sort((a,b) => (avg(byAssignee[b].lead_times)||0) - (avg(byAssignee[a].lead_times)||0))[0];
+  if (bottleneck && avg(byAssignee[bottleneck].lead_times) != null) {
+    document.getElementById('kpi-bottleneck').textContent = avg(byAssignee[bottleneck].lead_times).toFixed(1) + 'd';
+    document.getElementById('kpi-bottleneck-sub').textContent = bottleneck;
+  }
+
+  // Chart 1: Throughput stacked bar
+  const tpTraces = assignees.map((name, i) => {
+    const y = periods.map(p => {
+      const row = RAW.find(r => r.assignee === name && r.period === p);
+      return row ? row.completed : 0;
+    });
+    return { x: periods, y, type:'bar', name, marker:{color: COLORS[i % COLORS.length]} };
+  });
+  Plotly.react('chart-tp', tpTraces, {...L, barmode:'stack', yaxis:{...L.yaxis, title:'Issues'}}, C);
+
+  // Chart 2: Lead Time horizontal bar
+  const leadVals = assignees.map(a => avg(byAssignee[a].lead_times));
+  const leadColors = leadVals.map(v => v == null ? '#2e3250' : (globalAvgLead && v > globalAvgLead * 1.5 ? '#ef4444' : v > globalAvgLead ? '#f59e0b' : '#10b981'));
+  Plotly.react('chart-lead', [{
+    x: leadVals, y: assignees, type:'bar', orientation:'h',
+    marker:{color: leadColors},
+    text: leadVals.map(v => v != null ? v.toFixed(1)+'d' : ''),
+    textposition:'outside', textfont:{size:10},
+  }], {
+    ...L, margin:{...L.margin, l:120},
+    xaxis:{...L.xaxis, title:'Días', tickangle:0},
+    yaxis:{...L.yaxis, automargin:true},
+    showlegend:false,
+  }, C);
+
+  // Chart 3: Cycle Time horizontal bar
+  const cycleVals = assignees.map(a => avg(byAssignee[a].cycle_times));
+  const globalAvgCycle = avg(cycleVals.filter(x=>x!=null));
+  const cycleColors = cycleVals.map(v => v == null ? '#2e3250' : (globalAvgCycle && v > globalAvgCycle * 1.5 ? '#ef4444' : v > globalAvgCycle ? '#f59e0b' : '#10b981'));
+  Plotly.react('chart-cycle', [{
+    x: cycleVals, y: assignees, type:'bar', orientation:'h',
+    marker:{color: cycleColors},
+    text: cycleVals.map(v => v != null ? v.toFixed(1)+'d' : ''),
+    textposition:'outside', textfont:{size:10},
+  }], {
+    ...L, margin:{...L.margin, l:120},
+    xaxis:{...L.xaxis, title:'Días', tickangle:0},
+    yaxis:{...L.yaxis, automargin:true},
+    showlegend:false,
+  }, C);
+
+  // Summary table
+  const maxTp = Math.max(...assignees.map(a => byAssignee[a].completed), 1);
+  const tbody = document.getElementById('summary-table');
+  if (tbody) {
+    for (const name of assignees) {
+      const a = byAssignee[name];
+      const lead = avg(a.lead_times);
+      const cycle = avg(a.cycle_times);
+      const isBottleneck = globalAvgLead && lead && lead > globalAvgLead * 2;
+      const leadPill = lead == null ? '<span class="pill pill-muted">—</span>'
+        : `<span class="pill ${lead > (globalAvgLead||0)*1.5 ? 'pill-red' : lead > (globalAvgLead||0) ? 'pill-warn' : 'pill-green'}">${lead.toFixed(1)}d</span>`;
+      const cyclePill = cycle == null ? '<span class="pill pill-muted">—</span>'
+        : `<span class="pill ${cycle > (globalAvgCycle||0)*1.5 ? 'pill-red' : cycle > (globalAvgCycle||0) ? 'pill-warn' : 'pill-green'}">${cycle.toFixed(1)}d</span>`;
+      const bugsPill = a.bugs === 0 ? '<span class="pill pill-green">0</span>'
+        : `<span class="pill ${a.bugs > 5 ? 'pill-red' : 'pill-warn'}">${a.bugs}</span>`;
+
+      const tr = document.createElement('tr');
+      if (isBottleneck) tr.classList.add('bottleneck-row');
+      tr.innerHTML = `
+        <td><strong>${name}</strong>${isBottleneck ? ' <span style="color:var(--danger);font-size:0.75rem">⚠ cuello de botella</span>' : ''}</td>
+        <td>
+          <div class="bar-wrap">
+            <div class="bar-bg"><div class="bar-fill" style="width:${(a.completed/maxTp*100).toFixed(0)}%;background:var(--accent)"></div></div>
+            <span>${a.completed}</span>
+          </div>
+        </td>
+        <td>${leadPill}</td>
+        <td>${cyclePill}</td>
+        <td>${bugsPill}</td>
+        <td style="color:var(--muted)">${a.periods.size}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+</script>
+</body>
+</html>

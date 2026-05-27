@@ -3,15 +3,18 @@ from sqlalchemy.orm import Session
 
 from . import db
 from .models import JiraProject
-from .seed import _fetch_metrics, _save_metrics
+from .seed import _fetch_metrics, _save_assignee_metrics, _save_metrics
 
 
 def _sync_project(project_key: str, session: Session) -> str:
     project = session.query(JiraProject).filter(JiraProject.key == project_key).first()
     if not project:
         return f"Project {project_key} not found"
-    metrics = _fetch_metrics(project)
+
+    metrics, assignee_metrics = _fetch_metrics(project)
     _save_metrics(project, metrics, session)
+    _save_assignee_metrics(project, assignee_metrics, session)
+
     return f"Synced {len(metrics)} buckets for {project_key}"
 
 

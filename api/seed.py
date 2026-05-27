@@ -2,25 +2,25 @@ import argparse
 
 from .db import init_db
 from . import db
-from .models import JiraProject, JiraSprint, MetricsSnapshot
+from .models import JiraProject, JiraSprint, MetricsSnapshot, AssigneeSnapshot
 from .services.jira_service import JiraClient, parse_date
 
 
 def _fetch_metrics(project):
     client = JiraClient()
     if project.is_kanban:
-        metrics, wip = client.compute_kanban_metrics(
+        metrics, wip, assignee_metrics = client.compute_kanban_metrics(
             project_key=project.key,
             story_points_field=project.story_points_field,
         )
     else:
-        metrics, wip = client.compute_metrics(
+        metrics, wip, assignee_metrics = client.compute_metrics(
             project_key=project.key,
             board_id=project.board_id,
             story_points_field=project.story_points_field,
             sprint_field=project.sprint_field,
         )
-    return metrics
+    return metrics, assignee_metrics
 
 
 def _save_metrics(project, metrics, session):
@@ -65,14 +65,31 @@ def _save_metrics(project, metrics, session):
     session.commit()
 
 
+def _save_assignee_metrics(project, assignee_metrics, session):
+    session.query(AssigneeSnapshot).filter(AssigneeSnapshot.project_id == project.id).delete()
+    for a in assignee_metrics:
+        session.add(AssigneeSnapshot(
+            project_id=project.id,
+            period=a["period"],
+            period_start=parse_date(a["start"]),
+            assignee=a["assignee"],
+            completed=a["completed"],
+            lead_time_avg=a["lead_time_avg"],
+            cycle_time_avg=a["cycle_time_avg"],
+            bugs_count=a["bugs_count"],
+        ))
+    session.commit()
+
+
 def sync_project(project_key: str):
     session = db.SessionLocal()
     try:
         project = session.query(JiraProject).filter(JiraProject.key == project_key).first()
         if not project:
             raise ValueError(f"Project {project_key} not found in database")
-        metrics = _fetch_metrics(project)
+        metrics, assignee_metrics = _fetch_metrics(project)
         _save_metrics(project, metrics, session)
+        _save_assignee_metrics(project, assignee_metrics, session)
         return f"Synced {len(metrics)} buckets for {project_key}"
     finally:
         session.close()

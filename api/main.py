@@ -12,7 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import db
 from .db import init_db
-from .models import JiraProject, MetricsSnapshot
+from .models import JiraProject, MetricsSnapshot, AssigneeSnapshot
 from .routes import router as api_router
 from .auth import authenticate, clear_session, get_auth_settings, require_login
 
@@ -73,7 +73,7 @@ def get_db():
 
 @app.get("/", include_in_schema=False)
 def home():
-    return RedirectResponse(url="/home")
+    return RedirectResponse(url="/dashboard")
 
 
 @app.get("/home", response_class=HTMLResponse)
@@ -308,3 +308,38 @@ def admin_sync_now(key: str, request: Request):
     except Exception as e:
         request.session["flash"] = {"type": "warn", "msg": f"Error sincronizando {key}: {e}"}
     return RedirectResponse(url="/admin/projects", status_code=303)
+
+
+@app.get("/assignees/{project_key}", response_class=HTMLResponse)
+def assignees_view(project_key: str, request: Request, db: Session = Depends(get_db)):
+    if not require_login(request):
+        return RedirectResponse(url="/login")
+    project = db.query(JiraProject).filter(JiraProject.key == project_key).first()
+    if not project:
+        return RedirectResponse(url="/home")
+
+    rows = db.query(AssigneeSnapshot).filter(
+        AssigneeSnapshot.project_id == project.id
+    ).order_by(AssigneeSnapshot.period.asc(), AssigneeSnapshot.assignee.asc()).all()
+
+    import json as _json
+    from markupsafe import Markup
+    data = [
+        {
+            "assignee": r.assignee,
+            "period": r.period,
+            "period_start": r.period_start.isoformat() if r.period_start else None,
+            "completed": r.completed,
+            "lead_time_avg": r.lead_time_avg,
+            "cycle_time_avg": r.cycle_time_avg,
+            "bugs_count": r.bugs_count,
+        }
+        for r in rows
+    ]
+    projects = db.query(JiraProject).filter(JiraProject.active.is_(True)).order_by(JiraProject.name).all()
+    return render_template("assignees.html", {
+        "request": request,
+        "project": project,
+        "projects": projects,
+        "data": Markup(_json.dumps(data, ensure_ascii=False)),
+    })

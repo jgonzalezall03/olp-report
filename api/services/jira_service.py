@@ -159,22 +159,24 @@ class JiraClient:
         DONE_STATUSES = {"Done", "Terminado", "Finalizada", "Closed", "Cerrado", "Resuelto", "Resolved"}
         params = {
             "jql": f"project = {project_key} AND status in ({','.join(repr(s) for s in DONE_STATUSES)}) AND updated >= '{cutoff_str}' ORDER BY updated ASC",
-            "fields": f"created,resolutiondate,status,updated,{story_points_field}",
+            "fields": f"created,resolutiondate,status,updated,assignee,issuetype,{story_points_field}",
             "expand": "changelog",
             "maxResults": 200,
         }
         issues = self._get_all(f"{self.base}/search/jql", params, key="issues")
 
         by_month = defaultdict(lambda: {"completed": 0, "velocity": 0, "lead_times": [], "cycle_times": [], "total": 0})
+        by_assignee_month = defaultdict(lambda: defaultdict(lambda: {"completed": 0, "lead_times": [], "cycle_times": [], "bugs": 0}))
 
         for issue in issues:
             fields = issue.get("fields", {})
             created = parse_date(fields.get("created"))
             resolutiondate = parse_date(fields.get("resolutiondate"))
-            status_name = fields.get("status", {}).get("name", "")
             story_points = fields.get(story_points_field) or 0
+            assignee = fields.get("assignee")
+            assignee_name = assignee.get("displayName") if assignee else "Sin asignar"
+            is_bug = fields.get("issuetype", {}).get("name", "") in {"Error", "Bug", "Defect", "Defecto"}
 
-            # Fecha de cierre: resolutiondate o última transición a estado Done
             closed_date = resolutiondate
             if not closed_date:
                 for entry in reversed(issue.get("changelog", {}).get("histories", [])):
@@ -196,15 +198,23 @@ class JiraClient:
             bucket["completed"] += 1
             bucket["velocity"] += story_points
 
+            lead = None
             if created and closed_date:
                 lead = (closed_date - created).total_seconds() / 86400
                 if lead >= 0:
                     bucket["lead_times"].append(lead)
-
-                # Cycle time: primera transición a In Progress
                 first_ip = self.get_first_in_progress(issue.get("changelog", {}).get("histories", []))
                 if first_ip and first_ip < closed_date:
-                    bucket["cycle_times"].append((closed_date - first_ip).total_seconds() / 86400)
+                    ct = (closed_date - first_ip).total_seconds() / 86400
+                    bucket["cycle_times"].append(ct)
+                    by_assignee_month[assignee_name][month_key]["cycle_times"].append(ct)
+
+            ab = by_assignee_month[assignee_name][month_key]
+            ab["completed"] += 1
+            if lead is not None and lead >= 0:
+                ab["lead_times"].append(lead)
+            if is_bug:
+                ab["bugs"] += 1
 
         metrics = []
         for month_key in sorted(by_month.keys()):
@@ -224,15 +234,33 @@ class JiraClient:
                 "cycle_time_med": round(sorted(cycle_times)[len(cycle_times) // 2], 1) if cycle_times else None,
                 "total_issues": b["total"],
             })
-        return metrics, {"total_wip": 0, "issues": []}
+
+        assignee_metrics = [
+            {
+                "assignee": name,
+                "period": month_key,
+                "start": f"{month_key}-01T00:00:00+00:00",
+                "completed": ab["completed"],
+                "lead_time_avg": round(sum(ab["lead_times"]) / len(ab["lead_times"]), 1) if ab["lead_times"] else None,
+                "cycle_time_avg": round(sum(ab["cycle_times"]) / len(ab["cycle_times"]), 1) if ab["cycle_times"] else None,
+                "bugs_count": ab["bugs"],
+            }
+            for name, months in by_assignee_month.items()
+            for month_key, ab in months.items()
+        ]
+        return metrics, {"total_wip": 0, "issues": []}, assignee_metrics
 
     def compute_metrics(self, project_key, board_id, story_points_field, sprint_field, months_back=6):
         sprints = self.get_project_sprints(board_id, months_back)
         metrics = []
         active_issues = []
 
+        by_assignee_sprint = defaultdict(lambda: defaultdict(lambda: {"completed": 0, "lead_times": [], "cycle_times": [], "bugs": 0}))
+
         for sprint in sprints:
             sprint_id = sprint["id"]
+            sprint_name = sprint.get("name")
+            sprint_start = sprint.get("startDate")
             issues = self.get_sprint_issues(project_key, sprint_id, story_points_field, sprint_field)
             changelogs = self.get_completed_with_changelogs(project_key, sprint_id)
 
@@ -240,9 +268,6 @@ class JiraClient:
             completed_points = 0
             lead_times = []
             cycle_times = []
-            assignee_counts = defaultdict(int)
-            type_counts = defaultdict(int)
-            priority_counts = defaultdict(int)
 
             for issue in issues:
                 fields = issue.get("fields", {})
@@ -254,26 +279,31 @@ class JiraClient:
                 assignee = fields.get("assignee")
                 assignee_name = assignee.get("displayName") if assignee else "Sin asignar"
                 issuetype = fields.get("issuetype", {}).get("name", "Unknown")
-                priority = fields.get("priority", {}).get("name", "Unknown")
                 is_done = resolutiondate is not None or status_name in {"Done", "Terminado", "Finalizada", "Closed"}
+                is_bug = issuetype in {"Error", "Bug", "Defect", "Defecto"}
 
                 if is_done:
                     completed_issues.append(key)
                     completed_points += story_points
+                    ab = by_assignee_sprint[assignee_name][sprint_name]
+                    ab["completed"] += 1
+                    ab["start"] = sprint_start
+                    if is_bug:
+                        ab["bugs"] += 1
                     if created and resolutiondate:
-                        lead_times.append((resolutiondate - created).total_seconds() / 86400)
+                        lead = (resolutiondate - created).total_seconds() / 86400
+                        lead_times.append(lead)
+                        ab["lead_times"].append(lead)
                         first_ip = self.get_first_in_progress(changelogs.get(key, []))
                         if first_ip and first_ip < resolutiondate:
-                            cycle_times.append((resolutiondate - first_ip).total_seconds() / 86400)
-
-                assignee_counts[assignee_name] += 1
-                type_counts[issuetype] += 1
-                priority_counts[priority] += 1
+                            ct = (resolutiondate - first_ip).total_seconds() / 86400
+                            cycle_times.append(ct)
+                            ab["cycle_times"].append(ct)
 
             metrics.append({
-                "sprint": sprint.get("name"),
+                "sprint": sprint_name,
                 "sprint_id": sprint_id,
-                "start": sprint.get("startDate"),
+                "start": sprint_start,
                 "end": sprint.get("endDate"),
                 "completed": len(completed_issues),
                 "velocity": completed_points,
@@ -283,14 +313,22 @@ class JiraClient:
                 "cycle_time_med": round(sorted(cycle_times)[len(cycle_times) // 2], 1) if cycle_times else None,
                 "total_issues": len(issues),
                 "bugs": sum(1 for i in issues if i.get('fields',{}).get('issuetype',{}).get('name','') in {'Error','Bug','Defect','Defecto'}),
-                "assignees": dict(assignee_counts),
-                "types": dict(type_counts),
-                "priorities": dict(priority_counts),
             })
 
         active_issues = self.get_active_issues(project_key, story_points_field, sprint_field)
-        wip_data = {
-            "total_wip": len(active_issues),
-            "issues": active_issues,
-        }
-        return metrics, wip_data
+        wip_data = {"total_wip": len(active_issues), "issues": active_issues}
+
+        assignee_metrics = [
+            {
+                "assignee": name,
+                "period": sprint_name,
+                "start": ab.get("start"),
+                "completed": ab["completed"],
+                "lead_time_avg": round(sum(ab["lead_times"]) / len(ab["lead_times"]), 1) if ab["lead_times"] else None,
+                "cycle_time_avg": round(sum(ab["cycle_times"]) / len(ab["cycle_times"]), 1) if ab["cycle_times"] else None,
+                "bugs_count": ab["bugs"],
+            }
+            for name, sprints_map in by_assignee_sprint.items()
+            for sprint_name, ab in sprints_map.items()
+        ]
+        return metrics, wip_data, assignee_metrics

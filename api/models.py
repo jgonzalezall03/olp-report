@@ -54,3 +54,19 @@ class MetricsSnapshot(Base):
 
     project = relationship("JiraProject", back_populates="metrics")
     sprint = relationship("JiraSprint", back_populates="metrics")
+
+
+class AssigneeSnapshot(Base):
+    __tablename__ = "assignee_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("jira_projects.id", ondelete="CASCADE"), nullable=False)
+    period = Column(String(32), nullable=False)   # sprint name o YYYY-MM
+    period_start = Column(DateTime, nullable=True)
+    assignee = Column(String(128), nullable=False)
+    completed = Column(Integer, default=0)
+    lead_time_avg = Column(Float, nullable=True)
+    cycle_time_avg = Column(Float, nullable=True)
+    bugs_count = Column(Integer, default=0)
+
+    project = relationship("JiraProject")
